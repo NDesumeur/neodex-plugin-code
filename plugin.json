@@ -1,0 +1,22 @@
+{
+  "id": "neodex.code",
+  "name": "Code secret",
+  "version": "1.0.0",
+  "author": "NDesumeur",
+  "description": "Trouve le code de 4 couleurs en 10 essais. Les fiches noires disent les bonnes couleurs bien placées, les blanches les bonnes couleurs mal placées.",
+  "icon": "icon.png",
+  "entry": "index.js",
+  "view": "code",
+  "neobase": ">=4.0.0",
+  "type": "app",
+  "category": "Jeux",
+  "syncMode": "progression",
+  "syncInfo": "Parties gagnées, essais.",
+  "mobile": false,
+  "system": false,
+  "dependencies": {},
+  "sdk": "2.1.0",
+  "permissions": [
+    "storage"
+  ]
+}
