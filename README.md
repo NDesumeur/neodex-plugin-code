@@ -8,7 +8,11 @@ Le jeu de déduction des codes de couleurs : l'ordinateur cache une combinaison 
 
 1. Compose ta proposition : **clic sur une couleur** de la palette, ou touches **1 à 6**. Les fiches se remplissent de gauche à droite.
 2. **Clic sur une fiche posée** pour l'enlever, ou **Retour** pour effacer la dernière.
-3. **Entrée** ou le bouton Valider envoie la ligne (il faut 4 fiches).
+3. **Entrée** ou le bouton Valider envoie la ligne (il faut 4 fiches, 5 en expert).
+
+Chaque pion tombe dans son trou avec un petit « toc », et les fiches d'indice se posent une à une.
+
+À la **manette** : la croix choisit la couleur (gauche / droite, haut / bas d'une ligne de la palette), **A** la pose, **B** ou **X** efface, **Y** ou **Start** valide ; en fin de partie, **A** rejoue. **PLEIN ÉCRAN** agrandit la planche à tout l'écran ; sinon elle s'adapte à la taille de la fenêtre.
 
 ## Les indices
 
@@ -23,6 +27,7 @@ Les indices ne disent pas quelles fiches sont concernées : c'est à toi de le d
 
 - Le code utilise 6 couleurs possibles.
 - **Couleurs en double possibles** (case cochée par défaut) : une même couleur peut apparaître plusieurs fois dans le code. Décoche-la pour une partie plus facile, avec 4 couleurs toutes différentes ; changer l'option lance une nouvelle partie.
+- **Mode expert** : un code de **5 couleurs parmi 8** (rose et turquoise en plus), touches 1 à 8. Ses statistiques et son record sont tenus à part.
 - Au bout de 10 essais sans succès, la partie est perdue. Dans les deux cas, le code est dévoilé en bas ; un clic relance.
 
 ## Statistiques

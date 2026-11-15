@@ -8,7 +8,11 @@ The colour-code deduction game: the computer hides a combination of 4 colours, a
 
 1. Build your guess: **click a colour** in the palette, or press keys **1 to 6**. Pegs fill from left to right.
 2. **Click a placed peg** to remove it, or **Backspace** to erase the last one.
-3. **Enter** or the Validate button submits the row (it needs 4 pegs).
+3. **Enter** or the Validate button submits the row (it needs 4 pegs, 5 in expert).
+
+Each peg drops into its hole with a little "tock", and the key pegs are set down one by one.
+
+With a **gamepad**: the d-pad picks the colour (left / right, up / down a palette row), **A** places it, **B** or **X** erases, **Y** or **Start** submits; when the game is over, **A** plays again. **FULLSCREEN** makes the board fill the screen; otherwise it fits the window size.
 
 ## The clues
 
@@ -23,6 +27,7 @@ The clues do not say which pegs they refer to: you deduce that, row after row. F
 
 - The code uses 6 possible colours.
 - **Duplicate colours allowed** (checked by default): the same colour can appear several times in the code. Uncheck it for an easier game with 4 different colours; changing the option starts a new game.
+- **Expert mode**: a code of **5 colours out of 8** (pink and turquoise added), keys 1 to 8. Its statistics and record are kept separately.
 - After 10 unsuccessful tries, the game is lost. Either way, the code is revealed at the bottom; a click starts again.
 
 ## Statistics

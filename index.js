@@ -1,23 +1,26 @@
 // Code secret : Trouve le code de 4 couleurs en 10 essais. Les fiches noires disent les bonnes couleurs bien placées, les blanches les bonnes couleurs mal placées.
 // Jeu NeoDex en pixel art dessiné à la main (police bitmap, cadres et boutons en pixels). Il tourne dans le bac à sable de NeoDex.
 const HTML = `<div class="appWrap wide">
-  <div class="agHead"><span class="label">Code secret</span><span class="hint">Clic sur une couleur (ou 1 à 6) · Entrée : valider · Retour : effacer</span></div>
+  <div class="agHead"><span class="label">Code secret</span><span class="hint">Clic sur une couleur (ou 1 à 6, 1 à 8 en expert) · Entrée : valider · Retour : effacer</span></div>
   <div class="gMain"><div class="gameBox"><canvas id="gc" width="288" height="216"></canvas></div>
     <div class="gSide">
       <div class="sysCard"><b>RECORDS</b><div class="gStats" id="gStats"></div></div>
-      <div class="row"><button class="btn main" id="gNew">NOUVELLE PARTIE</button></div>
+      <div class="row"><button class="btn main" id="gNew">NOUVELLE PARTIE</button><button class="btn" id="csFs">PLEIN ÉCRAN</button></div>
       <label class="row"><input type="checkbox" id="csDup"> Couleurs en double possibles</label>
-      <div class="hint">Fiche noire : une couleur juste et à la bonne place. Fiche blanche : une couleur juste, mais ailleurs.</div><div class="hint">Clique sur une fiche posée pour l'enlever.</div>
+      <label class="row"><input type="checkbox" id="csExp"> Mode expert : 5 trous, 8 couleurs</label>
+      <div class="hint">Fiche noire : une couleur juste et à la bonne place. Fiche blanche : une couleur juste, mais ailleurs.</div><div class="hint">Clique sur une fiche posée pour l'enlever.</div><div class="hint">Manette : croix pour choisir la couleur, A pour la poser, B ou X pour effacer, Y ou Start pour valider.</div>
     </div></div>
 </div>`;
 const CSS = `.gMain{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
-.gameBox{display:grid;place-items:center;padding:10px;background:#05010b;flex:2;min-width:320px;position:relative}
+.gameBox{display:grid;place-items:center;padding:10px;background:#05010b;flex:2 1 560px;min-width:min(100%,560px);position:relative}
 .gameBox canvas{width:100%;image-rendering:pixelated;cursor:var(--cp,pointer);touch-action:none}
 .gSide{display:flex;flex-direction:column;gap:14px;flex:1;min-width:250px;max-width:420px}
 .gSide .sysCard{display:flex;flex-direction:column}
 .gStats{display:grid;grid-template-columns:1fr auto;gap:4px 14px}
 .gStats b{text-align:right}
-.gameBox canvas{max-width:640px;aspect-ratio:288/216}`;
+.gameBox canvas{width:min(100%,max(320px,calc((100vh - 200px) * 288 / 216)));height:auto;aspect-ratio:288/216}
+.gameBox:fullscreen{padding:0}
+.gameBox:fullscreen canvas{width:min(100vw,calc(100vh * 288 / 216))}`;
 /* ---------- l'habillage pixel art, dessiné à la main : police bitmap (accents compris), cadres, boutons, icônes ----------
    Tout est en pixels pleins, agrandis par 2 sans lissage : aucun dégradé, aucune ombre floue. */
 const PXK = (() => {
@@ -328,13 +331,20 @@ let actx = null;
 const beep = (f, d = .1, type = 'square', slide = 0, vol = .08) => { try { actx ??= new AudioContext(); const o = actx.createOscillator(), gn = actx.createGain(), t = actx.currentTime; o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + d); gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(gn).connect(actx.destination); o.start(t); o.stop(t + d + .02); } catch {} };
 const keyOk = e => view.classList.contains('on') && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName);
 const showStats = rows => $('gStats').replaceChildren(...rows.flatMap(([a, b]) => [el('span', '', a), el('b', '', String(b))]));
-/* ---------- Code secret : trouver 4 couleurs en 10 essais ; une fiche noire = bonne couleur bien placée, une blanche = bonne couleur mal placée ---------- */
-const CS_COL = [['#ff4a5a', '#ffb0b8', '#a02030'], ['#ffd84a', '#fff4b0', '#b08a10'], ['#5fbf6a', '#c8ffc8', '#2a7a3a'], ['#3f8aff', '#b0d0ff', '#1a4aa0'], ['#b07aff', '#e4d0ff', '#6a3ab0'], ['#ffa030', '#ffe0a0', '#b0600a']];
-const CS_PEG = CS_COL.map(([m, l, d]) => spr(['..kkkk..', '.kllmmk.', 'klwlmmdk', 'klmmmmdk', 'kmmmmmdk', 'kmmmmddk', '.kddddk.', '..kkkk..'], {k: '#140a04', l, m, d, w: '#ffffff'}));
-const CS_HOLE = spr(['..kkkk..', '.kddddk.', 'kdHHHHdk', 'kdHHHHdk', 'kdHHHHdk', 'kdHHHHdk', '.kddddk.', '..kkkk..'], {k: '#2a1408', d: '#3e2210', H: '#24120a'});
-const CS_PIN = [spr(['.kk.', 'kwwk', 'kwwk', '.kk.'], {k: '#140a04', w: '#1a1a20'}), spr(['.kk.', 'kwwk', 'kwwk', '.kk.'], {k: '#140a04', w: '#ffffff'})];
+/* ---------- Code secret : trouver le code (4 couleurs parmi 6, ou 5 parmi 8 en expert) en 10 essais ;
+   une fiche noire = bonne couleur bien placée, une blanche = bonne couleur mal placée ---------- */
+const CS_COL = [['#ff4a5a', '#ffb0b8', '#a02030'], ['#ffd84a', '#fff4b0', '#b08a10'], ['#5fbf6a', '#c8ffc8', '#2a7a3a'], ['#3f8aff', '#b0d0ff', '#1a4aa0'], ['#b07aff', '#e4d0ff', '#6a3ab0'], ['#ffa030', '#ffe0a0', '#b0600a'],
+  ['#ff7ad8', '#ffd0f0', '#a83a88'], ['#4ae0e0', '#c0fbfb', '#1a8a90']];
+// les pions en relief : reflet en haut à gauche, ombre en bas à droite
+const CS_PEG = CS_COL.map(([m, l, d]) => spr(['...kkkk...', '..kllmmk..', '.klwwlmmk.', 'klwwlmmmdk', 'klllmmmmdk', 'kmlmmmmmdk', 'kmmmmmmddk', '.kmmmmddk.', '..kddddk..', '...kkkk...'], {k: '#140a04', l, m, d, w: '#ffffff'}));
+const CS_HOLE = spr(['...kkkk...', '..kddddk..', '.kdHHHHdk.', 'kdHHHHHHdk', 'kdHHHHHHdk', 'kdHHHHHHdk', 'kdHHHHHHlk', '.kdHHHHlk.', '..kdlllk..', '...kkkk...'], {k: '#2a1408', d: '#3e2210', H: '#1a0c06', l: '#7a4a28'});
+const CS_PIN_ROWS = ['.kkk.', 'kwwmk', 'kwmmk', 'kmmdk', '.kkk.'];
+const CS_PIN = [spr(CS_PIN_ROWS, {k: '#140a04', w: '#6a6a78', m: '#2a2a34', d: '#101016'}), spr(CS_PIN_ROWS, {k: '#140a04', w: '#ffffff', m: '#d8d8e0', d: '#8a8a98'})];
 const css = gstore('code', {games: 0, wins: 0, tries: 0, dup: true});
-const CS = {X: 34, Y: 14, ROW: 19, TRIES: 10};
+const csSt = () => css.expert ? (css.x ??= {games: 0, wins: 0, tries: 0}) : css;  // les statistiques du mode expert à part
+const CS = {X: 30, Y: 14, ROW: 19, TRIES: 10};
+// la disposition d'une ligne : écart des trous, place des fiches (2×2 pour 4 trous, 3+2 pour 5), bord droit de la planche
+const csLay = n => { const hs = n === 4 ? 20 : 17, pinX = CS.X + n * hs + 2; return {hs, pinX, right: pinX + (n === 4 ? 13 : 17), pin: k => n === 4 ? [pinX + (k % 2) * 7, 4 + Math.floor(k / 2) * 6] : [pinX + (k % 3) * 6, 4 + Math.floor(k / 3) * 6]}; };
 function csScore(code, guess) {  // [bien placées, mal placées]
   let ok = 0; const a = [], b = [];
   code.forEach((c, i) => { if (guess[i] === c) ok++; else { a.push(c); b.push(guess[i]); } });
@@ -342,61 +352,111 @@ function csScore(code, guess) {  // [bien placées, mal placées]
   return [ok, near];
 }
 let cs = null;
+function csCode(n, k, dup) { const code = []; while (code.length < n) { const c = Math.floor(Math.random() * k); if (dup || !code.includes(c)) code.push(c); } return code; }
 function csNew() {
-  const code = []; while (code.length < 4) { const c = Math.floor(Math.random() * 6); if (css.dup || !code.includes(c)) code.push(c); }
-  cs = Object.assign(cs || {tick: 0, raf: 0}, {mode: 'play', code, rows: [], cur: [], end: 0, hover: -1});
+  const n = css.expert ? 5 : 4, k = css.expert ? 8 : 6;
+  cs = Object.assign(cs || {tick: 0, raf: 0, sel: 0}, {mode: 'play', n, k, code: csCode(n, k, css.dup), rows: [], cur: [], at: [], end: 0, hover: -1, pad: false});
+  if (cs.sel >= k) cs.sel = 0;
   csInfo();
 }
-function csPick(c) { if (cs.mode !== 'play' || cs.cur.length >= 4) return; cs.cur.push(c); beep(400 + c * 90, .06, 'triangle'); }
+// un pion posé : il tombe dans son trou, et « toc » quand il y arrive
+const csToc = c => setTimeout(() => { beep(560 + c * 40, .05, 'triangle', 220, .12); beep(1600, .015, 'square', 0, .02); }, 90);
+function csPick(c) { if (cs.mode !== 'play' || cs.cur.length >= cs.n || c >= cs.k) return; cs.cur.push(c); cs.at.push(cs.tick); csToc(c); }
+function csErase(k = cs.cur.length - 1) { if (cs.mode !== 'play' || k < 0 || k >= cs.cur.length) return; cs.cur.splice(k, 1); cs.at.splice(k, 1); beep(250, .05); }
 function csSubmit() {
-  if (cs.mode !== 'play' || cs.cur.length < 4) return beep(140, .1);
-  const [ok, near] = csScore(cs.code, cs.cur); cs.rows.push({g: cs.cur, ok, near}); cs.cur = [];
-  if (ok === 4) { cs.mode = 'won'; css.wins++; css.games++; css.tries += cs.rows.length; best('code', -cs.rows.length); [523, 659, 784].forEach((f, k) => setTimeout(() => beep(f, .15, 'triangle'), k * 120)); }
-  else if (cs.rows.length >= CS.TRIES) { cs.mode = 'lost'; css.games++; beep(180, .4, 'sawtooth', 80); }
+  if (cs.mode !== 'play' || cs.cur.length < cs.n) return beep(140, .1);
+  const [ok, near] = csScore(cs.code, cs.cur); cs.rows.push({g: cs.cur, ok, near, at: cs.tick}); cs.cur = []; cs.at = [];
+  for (let k = 0; k < ok + near; k++) setTimeout(() => beep(k < ok ? 880 : 1320, .03, 'square', 0, .035), 150 + k * 110);  // les fiches se posent une à une
+  const st = csSt();
+  if (ok === cs.n) { cs.mode = 'won'; st.wins++; st.games++; st.tries += cs.rows.length; best(css.expert ? 'codeX' : 'code', -cs.rows.length); [523, 659, 784].forEach((f, k) => setTimeout(() => beep(f, .15, 'triangle'), 300 + k * 120)); }
+  else if (cs.rows.length >= CS.TRIES) { cs.mode = 'lost'; st.games++; setTimeout(() => beep(180, .4, 'sawtooth', 80), 300); }
   else beep(600, .05);
   if (cs.mode !== 'play') { cs.end = 0; cs.endAt = cs.tick; saveGames(); csInfo(); }
 }
-const CS_BG = cnv(W, H, b => {  // la planche de bois, rainures et trous
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const n = Math.sin(x * .05 + Math.sin(y * .11) * 2) > .7 ? 1 : 0; px(b, y % 32 === 0 ? '#3a1e0e' : n ? '#7a4a28' : '#6a3e22', x, y); }
-  px(b, '#140a04', CS.X - 8, CS.Y - 6, 134, CS.ROW * CS.TRIES + 10); px(b, '#5a3218', CS.X - 7, CS.Y - 5, 132, CS.ROW * CS.TRIES + 8);
-  for (let r = 0; r < CS.TRIES; r++) { const y = CS.Y + (CS.TRIES - 1 - r) * CS.ROW; px(b, '#4a2812', CS.X - 6, y + 17, 130, 1); for (let i = 0; i < 4; i++) b.drawImage(CS_HOLE, CS.X + i * 20, y + 4); for (let k = 0; k < 4; k++) px(b, '#2a1408', CS.X + 88 + (k % 2) * 7, y + 5 + Math.floor(k / 2) * 7, 4, 4); }
-  px(b, '#140a04', 182, 14, 92, 188); px(b, '#5a3218', 183, 15, 90, 186);
+const csBg = n => cnv(W, H, b => {  // la planche de bois, rainures et trous
+  const L = csLay(n);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const v = Math.sin(x * .05 + Math.sin(y * .11) * 2) > .7 ? 1 : 0; px(b, y % 32 === 0 ? '#3a1e0e' : v ? '#7a4a28' : '#6a3e22', x, y); }
+  const bw = L.right + 6 - (CS.X - 8);
+  px(b, '#140a04', CS.X - 8, CS.Y - 6, bw, CS.ROW * CS.TRIES + 10); px(b, '#5a3218', CS.X - 7, CS.Y - 5, bw - 2, CS.ROW * CS.TRIES + 8); px(b, '#7a4a28', CS.X - 7, CS.Y - 5, bw - 2, 1);
+  for (let r = 0; r < CS.TRIES; r++) { const y = CS.Y + (CS.TRIES - 1 - r) * CS.ROW; px(b, '#4a2812', CS.X - 6, y + 17, bw - 4, 1);
+    for (let i = 0; i < n; i++) b.drawImage(CS_HOLE, CS.X + i * L.hs, y + 4);
+    for (let k = 0; k < n; k++) { const [x, yy] = L.pin(k); px(b, '#2a1408', x + 1, y + yy + 1, 3, 3); } }
+  px(b, '#140a04', 182, 14, 92, 188); px(b, '#5a3218', 183, 15, 90, 186); px(b, '#7a4a28', 183, 15, 90, 1);
 });
-const csPal = (x, y) => { for (let c = 0; c < 6; c++) { const px0 = 196 + (c % 2) * 34, py0 = 30 + Math.floor(c / 2) * 30; if (x >= px0 - 4 && x < px0 + 20 && y >= py0 - 4 && y < py0 + 20) return c; } return -1; };
+const CS_BGS = {4: csBg(4), 5: csBg(5)};
+const csPalXY = c => [196 + (c % 2) * 34, 30 + Math.floor(c / 2) * (cs.k === 6 ? 30 : 22)];
+const csPal = (x, y) => { for (let c = 0; c < cs.k; c++) { const [x0, y0] = csPalXY(c); if (x >= x0 - 3 && x < x0 + 23 && y >= y0 - 3 && y < y0 + 23) return c; } return -1; };
+const csPeg = (c, x, y, drop = 0) => { px(g, 'rgba(20,10,4,.45)', x + 2, y + 9, 9, 2); g.drawImage(CS_PEG[c], x, y - drop); };
 function csDraw() {
   if (cs.mode !== 'play') cs.end = cs.tick - cs.endAt;
-  g.drawImage(CS_BG, 0, 0);
-  cs.rows.forEach((r, i) => { const y = CS.Y + (CS.TRIES - 1 - i) * CS.ROW; r.g.forEach((c, k) => g.drawImage(CS_PEG[c], CS.X + k * 20, y + 4)); const pins = [...Array(r.ok).fill(0), ...Array(r.near).fill(1)]; pins.forEach((p, k) => g.drawImage(CS_PIN[p], CS.X + 88 + (k % 2) * 7, y + 5 + Math.floor(k / 2) * 7)); });
-  if (cs.mode === 'play') { const y = CS.Y + (CS.TRIES - 1 - cs.rows.length) * CS.ROW; px(g, '#ffd84a', CS.X - 6, y + 2, 2, 14); cs.cur.forEach((c, k) => g.drawImage(CS_PEG[c], CS.X + k * 20, y + 4)); }
-  // la palette (grosses fiches), la case du code caché, le bouton valider
-  for (let c = 0; c < 6; c++) { const x = 196 + (c % 2) * 34, y = 30 + Math.floor(c / 2) * 30; if (cs.hover === c) px(g, '#ffd84a', x - 3, y - 3, 22, 22); g.save(); g.translate(x, y); g.scale(2, 2); g.drawImage(CS_PEG[c], 0, 0); g.restore(); }
+  const L = csLay(cs.n); g.drawImage(CS_BGS[cs.n], 0, 0);
+  cs.rows.forEach((r, i) => { const y = CS.Y + (CS.TRIES - 1 - i) * CS.ROW; r.g.forEach((c, k) => csPeg(c, CS.X + k * L.hs, y + 4));
+    [...Array(r.ok).fill(0), ...Array(r.near).fill(1)].forEach((p, k) => { if (cs.tick - r.at < 9 + k * 6.6) return; const [x, yy] = L.pin(k); g.drawImage(CS_PIN[p], x, y + yy); }); });
+  if (cs.mode === 'play') { const y = CS.Y + (CS.TRIES - 1 - cs.rows.length) * CS.ROW; px(g, '#ffd84a', CS.X - 6, y + 2, 2, 15);
+    cs.cur.forEach((c, k) => { const t = cs.tick - cs.at[k]; csPeg(c, CS.X + k * L.hs, y + 4, t < 6 ? (6 - t) * 2 : t === 7 ? 1 : 0); }); }
+  // la palette (grosses fiches), les boutons, la case du code caché
+  for (let c = 0; c < cs.k; c++) { const [x, y] = csPalXY(c), on = cs.hover === c || (cs.pad && cs.sel === c && cs.mode === 'play');
+    if (on) { px(g, '#140a04', x - 3, y - 3, 26, 26); px(g, cs.pad && (cs.tick >> 4) % 2 ? '#fff4b0' : '#ffd84a', x - 2, y - 2, 24, 24); }
+    g.save(); g.translate(x, y); g.scale(2, 2); g.drawImage(CS_PEG[c], 0, 0); g.restore(); }
   pxFont(g, 'Couleurs', 228, 25, '#ffe0a0', 6, 'center');
-  const vb = cs.cur.length === 4 && cs.mode === 'play'; px(g, '#140a04', 196, 126, 64, 20); px(g, vb ? '#ffd84a' : '#3a2010', 197, 127, 62, 18); px(g, vb ? '#fff4b0' : '#4a2a14', 197, 127, 62, 1);
+  const vb = cs.cur.length === cs.n && cs.mode === 'play'; px(g, '#140a04', 196, 126, 64, 20); px(g, vb ? '#ffd84a' : '#3a2010', 197, 127, 62, 18); px(g, vb ? '#fff4b0' : '#4a2a14', 197, 127, 62, 1);
   pxFont(g, 'VALIDER', 228, 140, vb ? '#3a1e0e' : '#8a6a4a', 8, 'center');
   px(g, '#140a04', 196, 154, 64, 20); px(g, '#3a2010', 197, 155, 62, 18); pxFont(g, 'EFFACER', 228, 168, cs.cur.length ? '#ffe0a0' : '#8a6a4a', 8, 'center');
-  pxFont(g, 'Code', 228, 188, '#ffe0a0', 6, 'center');
-  for (let i = 0; i < 4; i++) { const x = 190 + i * 20; if (cs.mode === 'play') { px(g, '#2a1408', x, 192, 16, 8); } else g.drawImage(CS_PEG[cs.code[i]], x + 4, 192); }
-  if (cs.mode !== 'play' && cs.end > 30) gameText(g, W, [[cs.mode === 'won' ? 'TROUVÉ EN ' + cs.rows.length + ' !' : 'PERDU', cs.mode === 'won' ? '#ffd84a' : '#ff4a5a', 12], ['Clic pour rejouer', '#ffe0a0']], 98);
+  pxFont(g, cs.n === 5 ? 'Code · expert' : 'Code', 228, 186, '#ffe0a0', 6, 'center');
+  for (let i = 0; i < cs.n; i++) { const x = 228 - cs.n * 7 + i * 14; if (cs.mode === 'play') px(g, '#2a1408', x, 191, 10, 9); else csPeg(cs.code[i], x, 190); }
+  if (cs.mode !== 'play' && cs.end > 30) gameText(g, W, [[cs.mode === 'won' ? 'TROUVÉ EN ' + cs.rows.length + ' !' : 'PERDU', cs.mode === 'won' ? '#ffd84a' : '#ff4a5a', 12], ['Clic ou A pour rejouer', '#ffe0a0']], 98);
+  if (cs.tick % 30 === 0) cv.setAttribute('aria-label', 'Code secret : ' + (cs.mode === 'play' ? 'essai ' + (cs.rows.length + 1) + ' sur ' + CS.TRIES + ', ' + cs.cur.length + ' pions posés sur ' + cs.n : cs.mode === 'won' ? 'trouvé en ' + cs.rows.length : 'perdu'));
 }
-cv.onpointermove = e => { if (!cs) return; const [x, y] = cpos(e); cs.hover = csPal(x, y); };
+cv.onpointermove = e => { if (!cs) return; const [x, y] = cpos(e); cs.hover = csPal(x, y); cs.pad = false; };
 cv.onpointerdown = e => {
   e.preventDefault(); if (!cs) return; const [x, y] = cpos(e);
   if (cs.mode !== 'play') { if (cs.end > 30) csNew(); return; }
   const c = csPal(x, y); if (c >= 0) return csPick(c);
   if (x >= 196 && x < 260 && y >= 126 && y < 146) return csSubmit();
-  if (x >= 196 && x < 260 && y >= 154 && y < 174) { cs.cur.pop(); return beep(250, .05); }
-  const ry = CS.Y + (CS.TRIES - 1 - cs.rows.length) * CS.ROW, k = Math.floor((x - CS.X) / 20); if (y >= ry && y < ry + CS.ROW && k >= 0 && k < cs.cur.length) { cs.cur.splice(k, 1); beep(250, .05); }
+  if (x >= 196 && x < 260 && y >= 154 && y < 174) return csErase();
+  const ry = CS.Y + (CS.TRIES - 1 - cs.rows.length) * CS.ROW, k = Math.floor((x - CS.X) / csLay(cs.n).hs); if (y >= ry && y < ry + CS.ROW && x >= CS.X) csErase(k);
 };
 document.addEventListener('keydown', e => {
   if (!keyOk(e) || !cs) return;
-  if (e.key >= '1' && e.key <= '6') csPick(+e.key - 1);
+  if (e.key >= '1' && e.key <= '8') csPick(+e.key - 1);
   if (e.key === 'Enter') { e.preventDefault(); cs.mode === 'play' ? csSubmit() : csNew(); }
-  if (e.key === 'Backspace') { e.preventDefault(); cs.cur.pop(); }
+  if (e.key === 'Backspace') { e.preventDefault(); csErase(); }
 });
-function csInfo() { showStats([['Parties gagnées', css.wins + ' / ' + css.games], ['Moyenne d\'essais', css.wins ? (css.tries / css.wins).toFixed(1) : '-'], ['Meilleure partie', games.best.code ? -games.best.code + ' essais' : '-']]); $('csDup').checked = css.dup; }
+{  // la manette : croix = choisir la couleur (gauche / droite, haut / bas d'une ligne), A = poser, B ou X = effacer, Y ou Start = valider ; partie finie : A ou Start rejoue
+  let prev = [];
+  const loop = () => {
+    requestAnimationFrame(loop);
+    const p = [...(navigator.getGamepads?.() || [])].find(Boolean);
+    if (!p || !cs || !view.classList.contains('on')) { prev = []; return; }
+    const now = p.buttons.map(b => b.pressed), was = prev, hit = i => now[i] && !was[i]; prev = now;
+    if (![0, 1, 2, 3, 9, 12, 13, 14, 15].some(hit)) return;
+    cs.pad = true; cs.hover = -1;
+    if (cs.mode !== 'play') { if ((hit(0) || hit(9)) && cs.end > 30) csNew(); return; }
+    const mv = (hit(15) ? 1 : 0) - (hit(14) ? 1 : 0) + (hit(13) ? 2 : 0) - (hit(12) ? 2 : 0); if (mv) { cs.sel = (cs.sel + mv + cs.k * 2) % cs.k; beep(500, .02, 'triangle', 0, .03); }
+    if (hit(0)) csPick(cs.sel); if (hit(1) || hit(2)) csErase(); if (hit(3) || hit(9)) csSubmit();
+  };
+  requestAnimationFrame(loop);
+}
+function csInfo() {
+  const st = csSt(), b = games.best[css.expert ? 'codeX' : 'code'];
+  showStats([['Mode', css.expert ? 'Expert' : 'Normal'], ['Parties gagnées', st.wins + ' / ' + st.games], ['Moyenne d\'essais', st.wins ? (st.tries / st.wins).toFixed(1) : '-'], ['Meilleure partie', b ? -b + ' essais' : '-']]);
+  $('csDup').checked = css.dup; $('csExp').checked = !!css.expert;
+}
 $('csDup').onchange = () => { css.dup = $('csDup').checked; saveGames(); csNew(); };
+$('csExp').onchange = () => { css.expert = $('csExp').checked; saveGames(); csNew(); };
 $('gNew').onclick = () => { csNew(); $('gNew').blur(); };
-console.assert(csScore([0, 1, 2, 3], [0, 1, 2, 3]).join() === '4,0' && csScore([0, 0, 1, 1], [1, 1, 0, 0]).join() === '0,4' && csScore([0, 1, 2, 3], [0, 0, 0, 0]).join() === '1,0' && csScore([1, 2, 2, 3], [2, 2, 4, 2]).join() === '1,1', 'code secret');
+$('csFs').onclick = () => { $('csFs').blur(); try { if (document.fullscreenElement) document.exitFullscreen(); else cv.parentElement.requestFullscreen?.().catch(() => {}); } catch {} };
+function csCheck() {  // vérification : le calcul des fiches, les codes sans double, la place des 5 trous et des 8 couleurs
+  const bad = [];
+  if (!(csScore([0, 1, 2, 3], [0, 1, 2, 3]).join() === '4,0' && csScore([0, 0, 1, 1], [1, 1, 0, 0]).join() === '0,4' && csScore([0, 1, 2, 3], [0, 0, 0, 0]).join() === '1,0' && csScore([1, 2, 2, 3], [2, 2, 4, 2]).join() === '1,1'
+    && csScore([7, 6, 5, 4, 3], [3, 6, 7, 0, 0]).join() === '1,2')) bad.push('fiches');
+  for (let i = 0; i < 50; i++) { const c = csCode(5, 8, false); if (new Set(c).size !== 5 || c.some(v => v < 0 || v > 7)) { bad.push('code expert'); break; } }
+  for (const n of [4, 5]) { const L = csLay(n); if (L.right + 6 > 180 || [...Array(n).keys()].some(k => { const [x, y] = L.pin(k); return x + 5 > L.right + 1 || y + 5 > CS.ROW - 3; })) bad.push('planche ' + n); }
+  const keep = cs; cs = {k: 8}; const last = csPalXY(7); cs = keep; if (last[1] + 20 > 124) bad.push('palette');
+  return bad.length ? bad.join(', ') : 'ok';
+}
+console.assert(csCheck() === 'ok', 'code secret', csCheck());
+cv.__cs = {st: () => cs, css, check: csCheck, lay: csLay};
 ctx.onOpen(() => { if (!cs) csNew(); gameLoop(cs, 'code', () => {}, csDraw); csInfo(); });
 
 }

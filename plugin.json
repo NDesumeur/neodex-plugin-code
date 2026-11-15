@@ -1,16 +1,19 @@
 {
   "id": "neodex.code",
   "name": "Code secret",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "author": "NDesumeur",
-  "description": "Jeu de déduction : trouve le code de 4 couleurs (parmi 6) en 10 essais. Après chaque proposition, une fiche noire par couleur juste et bien placée, une blanche par couleur juste mais ailleurs. Couleurs en double possibles ou non, saisie à la souris ou aux touches 1 à 6, et statistiques : victoires, moyenne d'essais, meilleure partie.",
+  "description": "Jeu de déduction : trouve le code de 4 couleurs (parmi 6) en 10 essais. Après chaque proposition, une fiche noire par couleur juste et bien placée, une blanche par couleur juste mais ailleurs. Couleurs en double possibles ou non, saisie à la souris ou aux touches 1 à 6, et statistiques : victoires, moyenne d'essais, meilleure partie. Mode expert (5 trous, 8 couleurs), pions et fiches en relief posés avec un petit son, manette, plein écran, s'adapte à la taille de l'écran.",
   "icon": "icon.png",
   "entry": "index.js",
   "view": "code",
   "neobase": ">=4.0.0",
   "type": "app",
   "category": "Jeux",
-  "compatibility": ["windows", "linux"],
+  "compatibility": [
+    "windows",
+    "linux"
+  ],
   "syncMode": "progression",
   "syncInfo": "Parties gagnées, essais.",
   "mobile": false,
