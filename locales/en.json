@@ -72,5 +72,8 @@
   "Normal": "Normal",
   "Expert": "Expert",
   "Code · expert": "Code · expert",
-  "Manette : croix pour choisir la couleur, A pour la poser, B ou X pour effacer, Y ou Start pour valider.": "Gamepad: d-pad to pick the colour, A to place it, B or X to erase, Y or Start to submit."
+  "Manette : croix pour choisir la couleur, A pour la poser, B ou X pour effacer, Y ou Start pour valider.": "Gamepad: d-pad to pick the colour, A to place it, B or X to erase, Y or Start to submit.",
+  "Code secret :": "Secret code:",
+  "pions posés sur": "pegs placed on",
+  "trouvé en": "found in"
 }
