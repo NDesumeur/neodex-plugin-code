@@ -8,6 +8,8 @@ const HTML = `<div class="appWrap wide">
       <div class="row"><button class="btn main" id="gNew">NOUVELLE PARTIE</button><button class="btn" id="csFs">PLEIN ÉCRAN</button></div>
       <label class="row"><input type="checkbox" id="csDup"> Couleurs en double possibles</label>
       <label class="row"><input type="checkbox" id="csExp"> Mode expert : 5 trous, 8 couleurs</label>
+      <label class="row"><input type="checkbox" id="csInv"> Mode inverse : l'ordinateur devine ton code</label>
+      <label class="row"><input type="checkbox" id="csAid"> Aide : codes encore possibles après chaque essai</label>
       <div class="hint">Fiche noire : une couleur juste et à la bonne place. Fiche blanche : une couleur juste, mais ailleurs.</div><div class="hint">Clique sur une fiche posée pour l'enlever.</div><div class="hint">Manette : croix pour choisir la couleur, A pour la poser, B ou X pour effacer, Y ou Start pour valider.</div>
     </div></div>
 </div>`;
@@ -352,26 +354,62 @@ function csScore(code, guess) {  // [bien placées, mal placées]
   return [ok, near];
 }
 let cs = null;
+// tous les codes possibles (1296 pour 4 trous et 6 couleurs), gardés pour ne pas les refaire à chaque partie
+const CS_ALL = {};
+const csAll = (n, k, dup) => CS_ALL[n + '' + k + dup] ??= (function gen(p) { if (p.length === n) return [p]; const out = []; for (let c = 0; c < k; c++) if (dup || !p.includes(c)) out.push(...gen([...p, c])); return out; })([]);
+// la méthode de Knuth (1977) : parmi les essais possibles, celui dont la pire réponse laisse le moins de codes ; à égalité, un code encore possible.
+// shortcut: au-delà d'un million de comparaisons (mode expert), on cherche parmi les codes encore possibles, puis au hasard parmi eux
+function csKnuth(S, all, n, dup, first) {
+  if (first) return dup ? [0, 0, 1, 1, 2].slice(0, n) : [...Array(n).keys()];
+  if (S.length <= 2) return S[0];
+  const pool = S.length * all.length <= 1e6 ? all : S.length * S.length <= 1e6 ? S : null;
+  if (!pool) return S[Math.floor(Math.random() * S.length)];
+  const inS = new Set(S); let best = null, bw = 1e9, bIn = false;
+  for (const g of pool) {
+    const cnt = new Uint16Array(64); let w = 0;
+    for (const c of S) { const [a, b] = csScore(c, g), i = a * 8 + b; if (++cnt[i] > w) { w = cnt[i]; if (w > bw) break; } }
+    const gin = inS.has(g); if (w < bw || w === bw && gin && !bIn) { best = g; bw = w; bIn = gin; }
+  }
+  return best;
+}
+// après un essai : on ne garde que les codes qui auraient donné les mêmes fiches
+function csNarrow(gs, ok, near) { cs.S = cs.S.filter(c => { const [a, b] = csScore(c, gs); return a === ok && b === near; }); cs.left.push(cs.S.length); }
+const csOver = () => cs.mode === 'won' || cs.mode === 'lost';
+const csInput = () => cs.mode === 'play' || cs.mode === 'set';
 function csCode(n, k, dup) { const code = []; while (code.length < n) { const c = Math.floor(Math.random() * k); if (dup || !code.includes(c)) code.push(c); } return code; }
 function csNew() {
   const n = css.expert ? 5 : 4, k = css.expert ? 8 : 6;
-  cs = Object.assign(cs || {tick: 0, raf: 0, sel: 0}, {mode: 'play', n, k, code: csCode(n, k, css.dup), rows: [], cur: [], at: [], end: 0, hover: -1, pad: false});
+  const inv = !!css.inv;  // mode inverse : on compose d'abord son code, puis l'ordinateur le cherche
+  cs = Object.assign(cs || {tick: 0, raf: 0, sel: 0}, {mode: inv ? 'set' : 'play', inv, n, k, code: inv ? [] : csCode(n, k, css.dup), rows: [], cur: [], at: [], end: 0, hover: -1, pad: false, S: csAll(n, k, css.dup), left: [], aiAt: 0});
   if (cs.sel >= k) cs.sel = 0;
   csInfo();
 }
 // un pion posé : il tombe dans son trou, et « toc » quand il y arrive
 const csToc = c => setTimeout(() => { beep(560 + c * 40, .05, 'triangle', 220, .12); beep(1600, .015, 'square', 0, .02); }, 90);
-function csPick(c) { if (cs.mode !== 'play' || cs.cur.length >= cs.n || c >= cs.k) return; cs.cur.push(c); cs.at.push(cs.tick); csToc(c); }
-function csErase(k = cs.cur.length - 1) { if (cs.mode !== 'play' || k < 0 || k >= cs.cur.length) return; cs.cur.splice(k, 1); cs.at.splice(k, 1); beep(250, .05); }
+function csPick(c) { if (!csInput() || cs.cur.length >= cs.n || c >= cs.k) return; cs.cur.push(c); cs.at.push(cs.tick); csToc(c); }
+function csErase(k = cs.cur.length - 1) { if (!csInput() || k < 0 || k >= cs.cur.length) return; cs.cur.splice(k, 1); cs.at.splice(k, 1); beep(250, .05); }
 function csSubmit() {
-  if (cs.mode !== 'play' || cs.cur.length < cs.n) return beep(140, .1);
-  const [ok, near] = csScore(cs.code, cs.cur); cs.rows.push({g: cs.cur, ok, near, at: cs.tick}); cs.cur = []; cs.at = [];
+  if (!csInput() || cs.cur.length < cs.n) return beep(140, .1);
+  if (cs.mode === 'set') { cs.code = cs.cur; cs.cur = []; cs.at = []; cs.mode = 'ai'; cs.aiAt = cs.tick + 50; beep(660, .08, 'triangle'); return; }
+  const [ok, near] = csScore(cs.code, cs.cur); cs.rows.push({g: cs.cur, ok, near, at: cs.tick}); csNarrow(cs.cur, ok, near); cs.cur = []; cs.at = [];
   for (let k = 0; k < ok + near; k++) setTimeout(() => beep(k < ok ? 880 : 1320, .03, 'square', 0, .035), 150 + k * 110);  // les fiches se posent une à une
   const st = csSt();
   if (ok === cs.n) { cs.mode = 'won'; st.wins++; st.games++; st.tries += cs.rows.length; best(css.expert ? 'codeX' : 'code', -cs.rows.length); [523, 659, 784].forEach((f, k) => setTimeout(() => beep(f, .15, 'triangle'), 300 + k * 120)); }
   else if (cs.rows.length >= CS.TRIES) { cs.mode = 'lost'; st.games++; setTimeout(() => beep(180, .4, 'sawtooth', 80), 300); }
   else beep(600, .05);
   if (cs.mode !== 'play') { cs.end = 0; cs.endAt = cs.tick; saveGames(); csInfo(); }
+}
+function csUpdate() {  // le tour de l'ordinateur en mode inverse : un essai toutes les secondes environ, les fiches calculées toutes seules
+  if (cs.mode !== 'ai' || cs.tick < cs.aiAt) return;
+  const gs = csKnuth(cs.S, csAll(cs.n, cs.k, css.dup), cs.n, css.dup, !cs.rows.length), [ok, near] = csScore(cs.code, gs);
+  cs.rows.push({g: gs, ok, near, at: cs.tick}); csNarrow(gs, ok, near); cs.aiAt = cs.tick + 75;
+  gs.forEach((c, k) => setTimeout(() => csToc(c), k * 70));
+  for (let k = 0; k < ok + near; k++) setTimeout(() => beep(k < ok ? 880 : 1320, .03, 'square', 0, .035), 450 + k * 110);
+  if (ok === cs.n || cs.rows.length >= CS.TRIES) {
+    const st = (css.iv ??= {games: 0, tries: 0, x: 0, xt: 0}); if (cs.n === 5) { st.x++; st.xt += cs.rows.length; } else { st.games++; st.tries += cs.rows.length; }
+    cs.mode = ok === cs.n ? 'won' : 'lost'; cs.end = 0; cs.endAt = cs.tick; saveGames(); csInfo();
+    if (ok === cs.n) [784, 659, 523].forEach((f, k) => setTimeout(() => beep(f, .15, 'triangle'), 600 + k * 120));
+  }
 }
 const csBg = n => cnv(W, H, b => {  // la planche de bois, rainures et trous
   const L = csLay(n);
@@ -388,38 +426,48 @@ const csPalXY = c => [196 + (c % 2) * 34, 30 + Math.floor(c / 2) * (cs.k === 6 ?
 const csPal = (x, y) => { for (let c = 0; c < cs.k; c++) { const [x0, y0] = csPalXY(c); if (x >= x0 - 3 && x < x0 + 23 && y >= y0 - 3 && y < y0 + 23) return c; } return -1; };
 const csPeg = (c, x, y, drop = 0) => { px(g, 'rgba(20,10,4,.45)', x + 2, y + 9, 9, 2); g.drawImage(CS_PEG[c], x, y - drop); };
 function csDraw() {
-  if (cs.mode !== 'play') cs.end = cs.tick - cs.endAt;
+  csUpdate(); if (csOver()) cs.end = cs.tick - cs.endAt;  // la boucle commune ne fait avancer que le mode « play » : l'ordinateur joue d'ici
   const L = csLay(cs.n); g.drawImage(CS_BGS[cs.n], 0, 0);
   cs.rows.forEach((r, i) => { const y = CS.Y + (CS.TRIES - 1 - i) * CS.ROW; r.g.forEach((c, k) => csPeg(c, CS.X + k * L.hs, y + 4));
     [...Array(r.ok).fill(0), ...Array(r.near).fill(1)].forEach((p, k) => { if (cs.tick - r.at < 9 + k * 6.6) return; const [x, yy] = L.pin(k); g.drawImage(CS_PIN[p], x, y + yy); }); });
+  // les codes encore possibles après chaque essai (toujours en mode inverse, avec l'aide sinon)
+  if (cs.inv || css.aid) { const cx = (L.right + 188) / 2; cs.left.forEach((v, i) => { if (cs.tick - cs.rows[i].at < 12) return; const y = CS.Y + (CS.TRIES - 1 - i) * CS.ROW; pxFont(g, String(v), cx, y + 13, v === 1 ? '#ffd84a' : '#ffe0a0', 6, 'center'); });
+    if (cs.left.length) pxFont(g, 'reste', cx, CS.Y + CS.ROW * CS.TRIES + 4, '#c8a878', 6, 'center'); }
+  if (cs.mode === 'set') { const bx = (CS.X - 8 + L.right + 6) / 2; px(g, '#140a04', bx - 46, 84, 92, 34); px(g, '#2a1408', bx - 45, 85, 90, 32);
+    pxFont(g, 'Compose ton code', bx, 98, '#ffd84a', 6, 'center'); pxFont(g, 'puis VALIDER', bx, 110, '#ffe0a0', 6, 'center'); }
   if (cs.mode === 'play') { const y = CS.Y + (CS.TRIES - 1 - cs.rows.length) * CS.ROW; px(g, '#ffd84a', CS.X - 6, y + 2, 2, 15);
     cs.cur.forEach((c, k) => { const t = cs.tick - cs.at[k]; csPeg(c, CS.X + k * L.hs, y + 4, t < 6 ? (6 - t) * 2 : t === 7 ? 1 : 0); }); }
   // la palette (grosses fiches), les boutons, la case du code caché
-  for (let c = 0; c < cs.k; c++) { const [x, y] = csPalXY(c), on = cs.hover === c || (cs.pad && cs.sel === c && cs.mode === 'play');
+  if (cs.inv && cs.mode !== 'set') {  // l'ordinateur au travail : combien de codes il lui reste, sur combien au départ
+    pxFont(g, cs.mode === 'ai' ? 'L’ordi cherche…' : 'L’ordi a fini', 228, 32, '#ffe0a0', 6, 'center'); pxFont(g, 'codes possibles', 228, 52, '#c8a878', 6, 'center');
+    pxFont(g, String(cs.S.length), 228, 74, '#ffd84a', 12, 'center'); pxFont(g, 'sur ' + csAll(cs.n, cs.k, css.dup).length, 228, 88, '#c8a878', 6, 'center');
+    pxFont(g, 'Knuth (1977)', 228, 114, '#8a6a4a', 6, 'center');
+  } else for (let c = 0; c < cs.k; c++) { const [x, y] = csPalXY(c), on = cs.hover === c || (cs.pad && cs.sel === c && csInput());
     if (on) { px(g, '#140a04', x - 3, y - 3, 26, 26); px(g, cs.pad && (cs.tick >> 4) % 2 ? '#fff4b0' : '#ffd84a', x - 2, y - 2, 24, 24); }
     g.save(); g.translate(x, y); g.scale(2, 2); g.drawImage(CS_PEG[c], 0, 0); g.restore(); }
-  pxFont(g, 'Couleurs', 228, 25, '#ffe0a0', 6, 'center');
-  const vb = cs.cur.length === cs.n && cs.mode === 'play'; px(g, '#140a04', 196, 126, 64, 20); px(g, vb ? '#ffd84a' : '#3a2010', 197, 127, 62, 18); px(g, vb ? '#fff4b0' : '#4a2a14', 197, 127, 62, 1);
+  if (!cs.inv || cs.mode === 'set') pxFont(g, 'Couleurs', 228, 25, '#ffe0a0', 6, 'center');
+  const vb = cs.cur.length === cs.n && csInput(); px(g, '#140a04', 196, 126, 64, 20); px(g, vb ? '#ffd84a' : '#3a2010', 197, 127, 62, 18); px(g, vb ? '#fff4b0' : '#4a2a14', 197, 127, 62, 1);
   pxFont(g, 'VALIDER', 228, 140, vb ? '#3a1e0e' : '#8a6a4a', 8, 'center');
   px(g, '#140a04', 196, 154, 64, 20); px(g, '#3a2010', 197, 155, 62, 18); pxFont(g, 'EFFACER', 228, 168, cs.cur.length ? '#ffe0a0' : '#8a6a4a', 8, 'center');
-  pxFont(g, cs.n === 5 ? 'Code · expert' : 'Code', 228, 186, '#ffe0a0', 6, 'center');
-  for (let i = 0; i < cs.n; i++) { const x = 228 - cs.n * 7 + i * 14; if (cs.mode === 'play') px(g, '#2a1408', x, 191, 10, 9); else csPeg(cs.code[i], x, 190); }
-  if (cs.mode !== 'play' && cs.end > 30) gameText(g, W, [[cs.mode === 'won' ? 'TROUVÉ EN ' + cs.rows.length + ' !' : 'PERDU', cs.mode === 'won' ? '#ffd84a' : '#ff4a5a', 12], ['Clic ou A pour rejouer', '#ffe0a0']], 98);
-  if (cs.tick % 30 === 0) cv.setAttribute('aria-label', 'Code secret : ' + (cs.mode === 'play' ? 'essai ' + (cs.rows.length + 1) + ' sur ' + CS.TRIES + ', ' + cs.cur.length + ' pions posés sur ' + cs.n : cs.mode === 'won' ? 'trouvé en ' + cs.rows.length : 'perdu'));
+  pxFont(g, (cs.inv ? 'Ton code' : 'Code') + (cs.n === 5 ? ' · expert' : ''), 228, 186, '#ffe0a0', 6, 'center');
+  for (let i = 0; i < cs.n; i++) { const x = 228 - cs.n * 7 + i * 14, c = cs.mode === 'set' ? cs.cur[i] : cs.code[i]; if (cs.mode === 'play' || c === undefined) px(g, '#2a1408', x, 191, 10, 9); else csPeg(c, x, 190); }
+  if (csOver() && cs.end > 30) gameText(g, W, [[cs.inv ? (cs.mode === 'won' ? 'L’ORDI TROUVE EN ' + cs.rows.length : 'L’ORDI ÉCHOUE') : cs.mode === 'won' ? 'TROUVÉ EN ' + cs.rows.length + ' !' : 'PERDU', cs.mode === 'won' ? '#ffd84a' : '#ff4a5a', 12], ['Clic ou A pour rejouer', '#ffe0a0']], 98);
+  if (cs.tick % 30 === 0) cv.setAttribute('aria-label', 'Code secret : ' + (cs.mode === 'set' ? 'compose ton code, ' + cs.cur.length + ' pions sur ' + cs.n : cs.mode === 'ai' ? 'l’ordinateur cherche, essai ' + (cs.rows.length + 1) + ', ' + cs.S.length + ' codes possibles' : cs.mode === 'play' ? 'essai ' + (cs.rows.length + 1) + ' sur ' + CS.TRIES + ', ' + cs.cur.length + ' pions posés sur ' + cs.n : cs.mode === 'won' ? 'trouvé en ' + cs.rows.length : 'perdu'));
 }
 cv.onpointermove = e => { if (!cs) return; const [x, y] = cpos(e); cs.hover = csPal(x, y); cs.pad = false; };
 cv.onpointerdown = e => {
   e.preventDefault(); if (!cs) return; const [x, y] = cpos(e);
-  if (cs.mode !== 'play') { if (cs.end > 30) csNew(); return; }
+  if (csOver()) { if (cs.end > 30) csNew(); return; }
+  if (cs.mode === 'ai') return;
   const c = csPal(x, y); if (c >= 0) return csPick(c);
   if (x >= 196 && x < 260 && y >= 126 && y < 146) return csSubmit();
   if (x >= 196 && x < 260 && y >= 154 && y < 174) return csErase();
-  const ry = CS.Y + (CS.TRIES - 1 - cs.rows.length) * CS.ROW, k = Math.floor((x - CS.X) / csLay(cs.n).hs); if (y >= ry && y < ry + CS.ROW && x >= CS.X) csErase(k);
+  const ry = CS.Y + (CS.TRIES - 1 - cs.rows.length) * CS.ROW, k = Math.floor((x - CS.X) / csLay(cs.n).hs); if (!cs.inv && y >= ry && y < ry + CS.ROW && x >= CS.X) csErase(k);
 };
 document.addEventListener('keydown', e => {
   if (!keyOk(e) || !cs) return;
   if (e.key >= '1' && e.key <= '8') csPick(+e.key - 1);
-  if (e.key === 'Enter') { e.preventDefault(); cs.mode === 'play' ? csSubmit() : csNew(); }
+  if (e.key === 'Enter') { e.preventDefault(); csOver() ? csNew() : csSubmit(); }
   if (e.key === 'Backspace') { e.preventDefault(); csErase(); }
 });
 {  // la manette : croix = choisir la couleur (gauche / droite, haut / bas d'une ligne), A = poser, B ou X = effacer, Y ou Start = valider ; partie finie : A ou Start rejoue
@@ -431,19 +479,24 @@ document.addEventListener('keydown', e => {
     const now = p.buttons.map(b => b.pressed), was = prev, hit = i => now[i] && !was[i]; prev = now;
     if (![0, 1, 2, 3, 9, 12, 13, 14, 15].some(hit)) return;
     cs.pad = true; cs.hover = -1;
-    if (cs.mode !== 'play') { if ((hit(0) || hit(9)) && cs.end > 30) csNew(); return; }
+    if (csOver()) { if ((hit(0) || hit(9)) && cs.end > 30) csNew(); return; }
+    if (cs.mode === 'ai') return;
     const mv = (hit(15) ? 1 : 0) - (hit(14) ? 1 : 0) + (hit(13) ? 2 : 0) - (hit(12) ? 2 : 0); if (mv) { cs.sel = (cs.sel + mv + cs.k * 2) % cs.k; beep(500, .02, 'triangle', 0, .03); }
     if (hit(0)) csPick(cs.sel); if (hit(1) || hit(2)) csErase(); if (hit(3) || hit(9)) csSubmit();
   };
   requestAnimationFrame(loop);
 }
 function csInfo() {
-  const st = csSt(), b = games.best[css.expert ? 'codeX' : 'code'];
+  const st = csSt(), b = games.best[css.expert ? 'codeX' : 'code'], iv = css.iv || {games: 0, tries: 0, x: 0, xt: 0}, [ig, it] = css.expert ? [iv.x, iv.xt] : [iv.games, iv.tries];
+  $('csInv').checked = !!css.inv; $('csAid').checked = !!css.aid;
+  if (css.inv) { $('csDup').checked = css.dup; $('csExp').checked = !!css.expert; return showStats([['Mode', 'Inverse' + (css.expert ? ' · expert' : '')], ['Codes trouvés par l’ordi', ig], ['Moyenne d’essais de l’ordi', ig ? (it / ig).toFixed(1) : '-']]); }
   showStats([['Mode', css.expert ? 'Expert' : 'Normal'], ['Parties gagnées', st.wins + ' / ' + st.games], ['Moyenne d\'essais', st.wins ? (st.tries / st.wins).toFixed(1) : '-'], ['Meilleure partie', b ? -b + ' essais' : '-']]);
   $('csDup').checked = css.dup; $('csExp').checked = !!css.expert;
 }
 $('csDup').onchange = () => { css.dup = $('csDup').checked; saveGames(); csNew(); };
 $('csExp').onchange = () => { css.expert = $('csExp').checked; saveGames(); csNew(); };
+$('csInv').onchange = () => { css.inv = $('csInv').checked; saveGames(); csNew(); };
+$('csAid').onchange = () => { css.aid = $('csAid').checked; saveGames(); };
 $('gNew').onclick = () => { csNew(); $('gNew').blur(); };
 $('csFs').onclick = () => { $('csFs').blur(); try { if (document.fullscreenElement) document.exitFullscreen(); else cv.parentElement.requestFullscreen?.().catch(() => {}); } catch {} };
 function csCheck() {  // vérification : le calcul des fiches, les codes sans double, la place des 5 trous et des 8 couleurs
@@ -453,10 +506,14 @@ function csCheck() {  // vérification : le calcul des fiches, les codes sans do
   for (let i = 0; i < 50; i++) { const c = csCode(5, 8, false); if (new Set(c).size !== 5 || c.some(v => v < 0 || v > 7)) { bad.push('code expert'); break; } }
   for (const n of [4, 5]) { const L = csLay(n); if (L.right + 6 > 180 || [...Array(n).keys()].some(k => { const [x, y] = L.pin(k); return x + 5 > L.right + 1 || y + 5 > CS.ROW - 3; })) bad.push('planche ' + n); }
   const keep = cs; cs = {k: 8}; const last = csPalXY(7); cs = keep; if (last[1] + 20 > 124) bad.push('palette');
+  if (csAll(4, 6, true).length !== 1296 || csAll(4, 6, false).length !== 360 || csAll(5, 8, false).length !== 6720 || new Set(csAll(4, 6, false).map(String)).size !== 360) bad.push('tous les codes');
+  if (csKnuth(csAll(4, 6, true), csAll(4, 6, true), 4, true, true).join() !== '0,0,1,1') bad.push('premier essai de Knuth');
   return bad.length ? bad.join(', ') : 'ok';
 }
 console.assert(csCheck() === 'ok', 'code secret', csCheck());
-cv.__cs = {st: () => cs, css, check: csCheck, lay: csLay};
+// pour le test : la partie entière de l'ordinateur contre un code donné, essai par essai
+const csSolve = (code, n = 4, k = 6, dup = true) => { const all = csAll(n, k, dup); let S = all; const out = []; while (out.length < CS.TRIES) { const gs = csKnuth(S, all, n, dup, !out.length), [a, b] = csScore(code, gs); out.push(gs.join('')); if (a === n) break; S = S.filter(c => { const [x, y] = csScore(c, gs); return x === a && y === b; }); } return out; };
+cv.__cs = {st: () => cs, css, check: csCheck, lay: csLay, solve: csSolve};
 ctx.onOpen(() => { if (!cs) csNew(); gameLoop(cs, 'code', () => {}, csDraw); csInfo(); });
 
 }

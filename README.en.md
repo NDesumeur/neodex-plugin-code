@@ -4,6 +4,10 @@ The colour-code deduction game: the computer hides a combination of 4 colours, a
 
 *Version française : [README.md](README.md)*
 
+## Reverse mode and help (new in 1.2.0)
+
+Tick **Reverse mode**: you make your code with the palette, confirm, and the computer searches for it on its own, one guess per second. It follows Donald Knuth's method (1977): each guess is the one whose worst answer leaves the fewest possible codes. With 4 holes and 6 colours it always wins in 5 guesses or fewer (4.5 on average). The panel shows how many codes are still possible out of 1296, and the board shows the count left after each guess. Tick **Help** to see that same count in your own games. The computer's guesses are counted separately.
+
 ## How to play
 
 1. Build your guess: **click a colour** in the palette, or press keys **1 to 6**. Pegs fill from left to right.

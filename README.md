@@ -4,6 +4,10 @@ Le jeu de déduction des codes de couleurs : l'ordinateur cache une combinaison 
 
 *English version: [README.en.md](README.en.md)*
 
+## Mode inverse et aide (nouveau en 1.2.0)
+
+Coche **Mode inverse** : tu composes ton code avec la palette, tu valides, et l'ordinateur le cherche tout seul, un essai par seconde. Il suit la méthode de Donald Knuth (1977) : à chaque essai, il choisit celui dont la pire réponse laisse le moins de codes possibles. Avec 4 trous et 6 couleurs, il trouve toujours en 5 essais au plus (4,5 en moyenne). Le panneau montre combien de codes restent possibles sur 1296, et la planche le nombre restant après chaque essai. Coche **Aide** pour voir ce même nombre pendant tes propres parties. Les essais de l'ordinateur sont comptés à part.
+
 ## Comment jouer
 
 1. Compose ta proposition : **clic sur une couleur** de la palette, ou touches **1 à 6**. Les fiches se remplissent de gauche à droite.

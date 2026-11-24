@@ -1,9 +1,9 @@
 {
   "id": "neodex.code",
   "name": "Code secret",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "author": "NDesumeur",
-  "description": "Jeu de déduction : trouve le code de 4 couleurs (parmi 6) en 10 essais. Après chaque proposition, une fiche noire par couleur juste et bien placée, une blanche par couleur juste mais ailleurs. Couleurs en double possibles ou non, saisie à la souris ou aux touches 1 à 6, et statistiques : victoires, moyenne d'essais, meilleure partie. Mode expert (5 trous, 8 couleurs), pions et fiches en relief posés avec un petit son, manette, plein écran, s'adapte à la taille de l'écran.",
+  "description": "Jeu de déduction : trouve le code de 4 couleurs (parmi 6) en 10 essais. Après chaque proposition, une fiche noire par couleur juste et bien placée, une blanche par couleur juste mais ailleurs. Couleurs en double possibles ou non, saisie à la souris ou aux touches 1 à 6, et statistiques : victoires, moyenne d'essais, meilleure partie. Mode expert (5 trous, 8 couleurs), pions et fiches en relief posés avec un petit son, manette, plein écran, s'adapte à la taille de l'écran. Jeu de déduction : trouve le code de 4 couleurs (parmi 6) en 10 essais. Après chaque proposition, une fiche noire par couleur juste et bien placée, une blanche par couleur juste mais ailleurs. Mode inverse : l'ordinateur devine ton code avec la méthode de Knuth (5 essais au plus) en montrant les codes encore possibles, et une aide qui les compte dans tes parties. Couleurs en double ou non, mode expert (5 trous, 8 couleurs), statistiques, manette, plein écran.",
   "icon": "icon.png",
   "entry": "index.js",
   "view": "code",

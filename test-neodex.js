@@ -6,7 +6,8 @@ module.exports = async ({ pj, sleep }) => {
   const shot = async n => { if (!process.env.NEO_SHOTS) return; const d = await pj(`document.getElementById('gc').toDataURL()`); require('fs').writeFileSync(require('path').join(process.env.NEO_SHOTS, 'code-' + n + '.png'), Buffer.from(d.split(',')[1], 'base64')); };
   await pj(`window.__e = []; addEventListener('error', e => __e.push(e.message)); 0`);
   const chk = await C('return T.check();'); if (chk !== 'ok') throw new Error('vérification : ' + chk);
-  const keep = await C('return JSON.stringify({dup: css.dup, expert: !!css.expert});');
+  const keep = await C('return JSON.stringify({dup: css.dup, expert: !!css.expert, inv: !!css.inv, aid: !!css.aid});');
+  await C('css.inv = false; css.expert = false; css.aid = false; return 0;');
   await pj(`document.getElementById('gNew').click(), 0`); await sleep(100);
   // deux essais faux puis le bon, au clavier
   const code = await C('return cs.code;');
@@ -34,7 +35,24 @@ module.exports = async ({ pj, sleep }) => {
   await sleep(900); if (await C('return cs.mode;') !== 'lost') throw new Error('la partie devait être perdue'); await shot('4-perdu');
   await tap(0); if (await C('return cs.mode + cs.rows.length;') !== 'play0') throw new Error('A devait relancer');
   await pj(`navigator.getGamepads = () => [], 0`);
-  await C(`const k = ${keep}; css.dup = k.dup; css.expert = k.expert; return 0;`); await pj(`document.getElementById('gNew').click(), 0`);
+  // le mode inverse : je compose mon code, l'ordinateur le trouve tout seul (méthode de Knuth : 5 essais au plus), les codes restants affichés
+  const box = id => pj(`(() => { const b = document.getElementById('${id}'); b.checked = !b.checked; b.dispatchEvent(new Event('change')); return 0; })()`);
+  await C('css.expert = false; css.dup = true; return 0;'); await box('csInv'); await sleep(100);
+  if (await C('return cs.mode + cs.n;') !== 'set4') throw new Error('mode inverse : ' + await C('return cs.mode;'));
+  for (const c of [6, 6, 5, 2]) await key(String(c)); await sleep(300); await shot('5-inverse-code');
+  await key('Enter'); await sleep(200); if (await C('return cs.mode + "|" + cs.code.join("");') !== 'ai|5541') throw new Error('mon code : ' + await C('return cs.mode + cs.code;'));
+  await key('1'); if (await C('return cs.cur.length;') !== 0) throw new Error("on joue à la place de l'ordinateur");
+  await sleep(2600); await shot('6-inverse-cherche');
+  for (let i = 0; i < 60 && await C('return cs.mode;') === 'ai'; i++) await sleep(200);
+  const inv = await C('return cs.mode + "|" + cs.rows.length + "|" + cs.left.at(-1) + "|" + cs.rows[0].g.join("");');
+  if (!/^won|[1-5]|1|0011$/.test(inv)) throw new Error("l'ordinateur devait trouver en 5 au plus : " + inv);
+  await sleep(700); await shot('7-inverse-trouve');
+  if (await C('return T.solve([5, 5, 4, 4]).length <= 5 && T.solve([0, 1, 2, 3], 4, 6, false).length <= 5 && T.solve([7, 0, 3, 3, 6], 5, 8, true).length <= 8;') !== true) throw new Error('Knuth');
+  await key('Enter'); await box('csInv'); await box('csAid'); await sleep(100);
+  const cd = await C('return cs.code;'); for (const c of cd.map(c => (c + 1) % 6)) await key(String(c + 1)); await key('Enter'); await sleep(400);
+  if (!(await C('return cs.left.length === 1 && cs.left[0] < 1296 && cs.left[0] > 0;'))) throw new Error('aide : codes restants');
+  await shot('8-aide');
+  await C(`const k = ${keep}; css.dup = k.dup; css.expert = k.expert; css.inv = k.inv; css.aid = k.aid; return 0;`); await pj(`document.getElementById('gNew').click(), 0`);
   const errs = await pj(`window.__e.join(' | ')`); if (errs) throw new Error('erreur : ' + errs);
   // plein écran, et la zone de jeu qui tient dans la fenêtre
   await pj(`document.getElementById('csFs').click(), 0`); await sleep(700);
