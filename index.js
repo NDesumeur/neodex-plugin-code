@@ -302,6 +302,9 @@ export default async function (ctx) {
   const saveGames = () => { clearTimeout(gamesTimer); gamesTimer = setTimeout(() => { gamesTimer = null; folder.write('games', games).catch(() => {}); }, 500); };
   const best = (k, v) => { const b = games.best[k]; if (b == null || v > b) { games.best[k] = v; saveGames(); return true; } return false; };
   const gstore = (k, init) => (games[k] ??= init);
+  // les trophées de NeoDex (3.4.8 et plus) : succès et records déclarés dans plugin.json ; sur un NeoDex plus ancien, rien ne se passe
+  const trophy = id => { ctx.games?.unlock(id).catch(() => {}); };
+  const trophyRecord = (id, v) => { if (v != null && Number.isFinite(+v)) ctx.games?.record(id, +v).catch(() => {}); };
 function gameLoop(st, appKey, update, draw) {
   cancelAnimationFrame(st.raf);
   const STEP = 1000 / 60; let acc = 0, last = performance.now();
@@ -394,7 +397,7 @@ function csSubmit() {
   const [ok, near] = csScore(cs.code, cs.cur); cs.rows.push({g: cs.cur, ok, near, at: cs.tick}); csNarrow(cs.cur, ok, near); cs.cur = []; cs.at = [];
   for (let k = 0; k < ok + near; k++) setTimeout(() => beep(k < ok ? 880 : 1320, .03, 'square', 0, .035), 150 + k * 110);  // les fiches se posent une à une
   const st = csSt();
-  if (ok === cs.n) { cs.mode = 'won'; st.wins++; st.games++; st.tries += cs.rows.length; best(css.expert ? 'codeX' : 'code', -cs.rows.length); [523, 659, 784].forEach((f, k) => setTimeout(() => beep(f, .15, 'triangle'), 300 + k * 120)); }
+  if (ok === cs.n) { cs.mode = 'won'; st.wins++; st.games++; st.tries += cs.rows.length; best(css.expert ? 'codeX' : 'code', -cs.rows.length); csTrophies(); [523, 659, 784].forEach((f, k) => setTimeout(() => beep(f, .15, 'triangle'), 300 + k * 120)); }
   else if (cs.rows.length >= CS.TRIES) { cs.mode = 'lost'; st.games++; setTimeout(() => beep(180, .4, 'sawtooth', 80), 300); }
   else beep(600, .05);
   if (cs.mode !== 'play') { cs.end = 0; cs.endAt = cs.tick; saveGames(); csInfo(); }
@@ -406,7 +409,7 @@ function csUpdate() {  // le tour de l'ordinateur en mode inverse : un essai tou
   gs.forEach((c, k) => setTimeout(() => csToc(c), k * 70));
   for (let k = 0; k < ok + near; k++) setTimeout(() => beep(k < ok ? 880 : 1320, .03, 'square', 0, .035), 450 + k * 110);
   if (ok === cs.n || cs.rows.length >= CS.TRIES) {
-    const st = (css.iv ??= {games: 0, tries: 0, x: 0, xt: 0}); if (cs.n === 5) { st.x++; st.xt += cs.rows.length; } else { st.games++; st.tries += cs.rows.length; }
+    const st = (css.iv ??= {games: 0, tries: 0, x: 0, xt: 0}); if (cs.n === 5) { st.x++; st.xt += cs.rows.length; } else { st.games++; st.tries += cs.rows.length; } csTrophies();
     cs.mode = ok === cs.n ? 'won' : 'lost'; cs.end = 0; cs.endAt = cs.tick; saveGames(); csInfo();
     if (ok === cs.n) [784, 659, 523].forEach((f, k) => setTimeout(() => beep(f, .15, 'triangle'), 600 + k * 120));
   }
@@ -514,6 +517,14 @@ console.assert(csCheck() === 'ok', 'code secret', csCheck());
 // pour le test : la partie entière de l'ordinateur contre un code donné, essai par essai
 const csSolve = (code, n = 4, k = 6, dup = true) => { const all = csAll(n, k, dup); let S = all; const out = []; while (out.length < CS.TRIES) { const gs = csKnuth(S, all, n, dup, !out.length), [a, b] = csScore(code, gs); out.push(gs.join('')); if (a === n) break; S = S.filter(c => { const [x, y] = csScore(c, gs); return x === a && y === b; }); } return out; };
 cv.__cs = {st: () => cs, css, check: csCheck, lay: csLay, solve: csSolve};
-ctx.onOpen(() => { if (!cs) csNew(); gameLoop(cs, 'code', () => {}, csDraw); csInfo(); });
+// les trophées, tirés des statistiques et des records gardés (aussi à l'ouverture : ce qui a été fait avant compte)
+function csTrophies() {
+  const b = games.best, n = css.wins || 0, x = css.x?.wins || 0, top = Math.max(b.code ?? -99, b.codeX ?? -99);
+  trophyRecord('normal', b.code != null ? -b.code : null); trophyRecord('expert', b.codeX != null ? -b.codeX : null);
+  if (n + x >= 1) trophy('premier'); if (n + x >= 10) trophy('dix'); if (n + x >= 50) trophy('cinquante');
+  if (top >= -3) trophy('trois'); if (top >= -2) trophy('deux'); if (x >= 1) trophy('expert'); if (x >= 10) trophy('expert10');
+  if (css.iv && css.iv.games + css.iv.x >= 1) trophy('inverse');
+}
+ctx.onOpen(() => { if (!cs) csNew(); gameLoop(cs, 'code', () => {}, csDraw); csInfo(); csTrophies(); });
 
 }

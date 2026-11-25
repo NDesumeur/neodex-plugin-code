@@ -1,7 +1,7 @@
 {
   "id": "neodex.code",
   "name": "Code secret",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": "NDesumeur",
   "description": "Jeu de déduction : trouve le code de 4 couleurs (parmi 6) en 10 essais. Après chaque proposition, une fiche noire par couleur juste et bien placée, une blanche par couleur juste mais ailleurs. Couleurs en double possibles ou non, saisie à la souris ou aux touches 1 à 6, et statistiques : victoires, moyenne d'essais, meilleure partie. Mode expert (5 trous, 8 couleurs), pions et fiches en relief posés avec un petit son, manette, plein écran, s'adapte à la taille de l'écran. Jeu de déduction : trouve le code de 4 couleurs (parmi 6) en 10 essais. Après chaque proposition, une fiche noire par couleur juste et bien placée, une blanche par couleur juste mais ailleurs. Mode inverse : l'ordinateur devine ton code avec la méthode de Knuth (5 essais au plus) en montrant les codes encore possibles, et une aide qui les compte dans tes parties. Couleurs en double ou non, mode expert (5 trous, 8 couleurs), statistiques, manette, plein écran.",
   "icon": "icon.png",
@@ -22,5 +22,62 @@
   "sdk": "2.1.0",
   "permissions": [
     "storage"
+  ],
+  "succes": [
+    {
+      "id": "premier",
+      "nom": "Code cassé",
+      "texte": "Trouver un premier code"
+    },
+    {
+      "id": "dix",
+      "nom": "Déducteur",
+      "texte": "Trouver 10 codes"
+    },
+    {
+      "id": "cinquante",
+      "nom": "Perceur de coffres",
+      "texte": "Trouver 50 codes"
+    },
+    {
+      "id": "trois",
+      "nom": "Esprit vif",
+      "texte": "Trouver un code en 3 essais au plus"
+    },
+    {
+      "id": "deux",
+      "nom": "Télépathe",
+      "texte": "Trouver un code en 2 essais",
+      "cache": true
+    },
+    {
+      "id": "expert",
+      "nom": "Cinq couleurs",
+      "texte": "Trouver un code en mode expert"
+    },
+    {
+      "id": "expert10",
+      "nom": "Expert en codes",
+      "texte": "Trouver 10 codes en mode expert"
+    },
+    {
+      "id": "inverse",
+      "nom": "Les rôles inversés",
+      "texte": "Faire deviner un code à l'ordinateur"
+    }
+  ],
+  "records": [
+    {
+      "id": "normal",
+      "nom": "Moins d'essais (normal)",
+      "sens": "bas",
+      "format": "nombre"
+    },
+    {
+      "id": "expert",
+      "nom": "Moins d'essais (expert)",
+      "sens": "bas",
+      "format": "nombre"
+    }
   ]
 }
